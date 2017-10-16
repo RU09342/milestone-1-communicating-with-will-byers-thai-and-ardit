@@ -1,3 +1,23 @@
+//  MSP430FR5994 MileStone
+//      Communication using UART
+//
+//   Description:
+//
+//   ACLK = 32.768kHz, MCLK = SMCLK = default DCO~1MHz
+//
+//                MSP430FR2311
+//             -----------------
+//         /|\|                 |
+//          | |                 |
+//          --|RST              |
+//            |                 |
+//            |             P1.0|-->LED
+//
+//   Thai Nghiem
+//   Rowan University
+//   September 2017
+//   Built with CCSv4 and IAR Embedded Workbench Version: 4.21
+//******************************************************************************
 #include <msp430.h>
 
 int TimerCount = 0;
@@ -11,13 +31,15 @@ char Message[80];
 int main(void)
 {
 
-    WDTCTL = WDTPW + WDTHOLD;                 // Stop WDT
+    WDTCTL = WDTPW + WDTHOLD;                 //Stop watchdog timer
+    PM5CTL0 &= ~LOCKLPM5;                    // Disable the GPIO power-on default high-impedance mode
+                                            // to activate previously configured port settings
 
+    P2SEL0 &= ~(BIT0 | BIT1);                // PWM output to LED Port 2
+    P2SEL1 |= BIT0 | BIT1;
 
-
-    P2SEL0 &= ~(BIT0 | BIT1);
-       P2SEL1 |= BIT0 | BIT1;                  // USCI_A0 UART operation
-       PM5CTL0 &= ~LOCKLPM5;
+    // USCI_A0 UART operation and intialization (inspired by William Goh in his/her code of
+    //                    "eUSCI_A0 UART echo at 9600 baud"
        CSCTL0_H = CSKEY_H;                     // Unlock CS registers
        CSCTL1 = DCOFSEL_3 | DCORSEL;           // Set DCO to 8MHz
        CSCTL2 = SELA__VLOCLK | SELS__DCOCLK | SELM__DCOCLK;
@@ -40,22 +62,19 @@ int main(void)
     UCA0CTLW0 &= ~UCSWRST;
     UCA0IE |= UCRXIE;
 
-    P1DIR |= BIT0;       // LED out
-    P1OUT &= ~BIT0;       // Clear LED
+    P1DIR |= BIT0;        // Set P1.0 to output direction
+    P1OUT &= ~BIT0;       // Switch LED off
 
-    P1DIR |= BIT1;       // LED out
-    P1OUT &= ~BIT1;       // Clear LED
+    P1DIR |= BIT1;       //set Port 1.1 output ---LED
+    P1OUT &= ~BIT1;       // Swich LED off
 
     P1DIR |= BIT3;       // P1.3 to output
-    // P1SEL |= BIT3;       // P1.3 to TA0.1
     P1DIR |= BIT4;     // P1.4 to output
-    // P1SEL |= BIT4;     // P1.4 to TA0.2
     P1DIR |= BIT5;      // P1.5 to output
-    // P1SEL |= BIT5;      // P1.5 to TA0.3
 
-    TA0CCTL0 = (CCIE);
-    TA0CCR0 = 0x0001;
-    TA0CTL = TASSEL_2 + MC_1 + ID_3;
+    TA0CCTL0 = (CCIE); //Timer A capture/control Interrupt Enable
+    TA0CCR0 = 0x0001; // Initialize CCRO
+    TA0CTL = TASSEL_2 + MC_1 + ID_3; // SMCLK / Upmode / Divider of 8
 
     redPWM = 1;
     greenPWM = 1;
@@ -66,39 +85,6 @@ int main(void)
 
 }
 
-#pragma vector=TIMER0_A0_VECTOR
-__interrupt void Timer0_A0_ISR(void)
-{
-
-    if (TimerCount == 255)
-    {
-        P1OUT |= BIT3
-        ; //turns on BIT3 led
-        P1OUT |= BIT4
-        ; //turns on BIT4 led
-        P1OUT |= BIT5
-        ; //turns on BIT5 led
-        TimerCount = 0;
-    }
-    if (TimerCount == redPWM)
-    {
-        P1OUT &= ~BIT3
-        ; //turns off BIT3 led
-    }
-    if (TimerCount == greenPWM)
-    {
-        P1OUT &= ~BIT4
-        ; //turns off BIT4 led
-    }
-    if (TimerCount == bluePWM)
-    {
-        P1OUT &= ~BIT5
-        ; //turns off BIT5 led
-    }
-
-    TimerCount++;
-    TA0CCTL0 &= ~BIT0;  //clears BIT0
-}
 
 #if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
 #pragma vector=USCI_A0_VECTOR
@@ -159,4 +145,31 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
     case USCI_UART_UCTXCPTIFG:
         break;
     }
+}
+#pragma vector=TIMER0_A0_VECTOR
+__interrupt void Timer0_A0_ISR(void)
+{
+
+    if (TimerCount == 255)
+    {
+        P1OUT |= BIT3; //turns on BIT3 led
+        P1OUT |= BIT4; //turns on BIT4 led
+        P1OUT |= BIT5; //turns on BIT5 led
+        TimerCount = 0;
+    }
+    if (TimerCount == redPWM)
+    {
+        P1OUT &= ~BIT3; //turns off BIT3 led
+    }
+    if (TimerCount == greenPWM)
+    {
+        P1OUT &= ~BIT4; //turns off BIT4 led
+    }
+    if (TimerCount == bluePWM)
+    {
+        P1OUT &= ~BIT5; //turns off BIT5 led
+    }
+
+    TimerCount++;
+    TA0CCTL0 &= ~BIT0;  //clears BIT0
 }
